@@ -389,25 +389,362 @@ function OutlineItem({ obj, depth = 0 }: { obj: OutlineObj; depth?: number }) {
   );
 }
 
+// ─── AI Model types ───────────────────────────────────────────────────────────
+type ModelStatus = "ready" | "downloading" | "not_loaded";
+interface LocalModel {
+  id: string;
+  name: string;
+  desc: string;
+  size: string;
+  icon: string;
+  color: string;
+  tag: string;
+  status: ModelStatus;
+  progress?: number;
+}
+
+type GenTab = "chat" | "models" | "image" | "video" | "music" | "3d" | "slides";
+
+const INITIAL_MODELS: LocalModel[] = [
+  { id: "llama3",   name: "Llama 3 8B",          desc: "Чат, генерация кода, блоки",       size: "4.7 GB", icon: "MessageSquare", color: "#a855f7", tag: "LLM",      status: "ready",       progress: 100 },
+  { id: "sd15",     name: "Stable Diffusion 1.5", desc: "Генерация изображений и текстур",   size: "4.2 GB", icon: "Image",         color: "#ec4899", tag: "Фото",     status: "not_loaded" },
+  { id: "sdxl",     name: "SDXL Turbo",           desc: "Быстрая генерация HD-изображений",  size: "6.7 GB", icon: "Sparkles",      color: "#f472b6", tag: "Фото",     status: "not_loaded" },
+  { id: "musicgen", name: "MusicGen Small",        desc: "Генерация мелодий и звуков",        size: "1.9 GB", icon: "Music",         color: "#06b6d4", tag: "Музыка",   status: "ready",       progress: 100 },
+  { id: "whisper",  name: "Whisper Base",          desc: "Распознавание речи офлайн",         size: "0.1 GB", icon: "Mic",           color: "#22c55e", tag: "Речь",     status: "ready",       progress: 100 },
+  { id: "shape",    name: "Shap-E",                desc: "3D модели из текстового описания",  size: "3.3 GB", icon: "Box",           color: "#fb923c", tag: "3D",       status: "not_loaded" },
+  { id: "svd",      name: "Stable Video Diff.",    desc: "Генерация видео из изображения",    size: "9.1 GB", icon: "Video",         color: "#f59e0b", tag: "Видео",    status: "not_loaded" },
+  { id: "animdiff", name: "AnimateDiff",           desc: "Анимация из текста/изображения",    size: "8.4 GB", icon: "Film",          color: "#ef4444", tag: "Видео",    status: "not_loaded" },
+  { id: "handpose", name: "Handpose TF.js",        desc: "Распознавание жестов камера",       size: "0.2 GB", icon: "Hand",          color: "#4ade80", tag: "Камера",   status: "ready",       progress: 100 },
+  { id: "yamnet",   name: "YAMNet",                desc: "Классификация звуков офлайн",       size: "0.3 GB", icon: "Volume2",       color: "#34d399", tag: "Звук",     status: "ready",       progress: 100 },
+];
+
+const STATUS_LABEL: Record<ModelStatus, string> = {
+  ready: "Готова",
+  downloading: "Загрузка...",
+  not_loaded: "Не загружена",
+};
+
+function StatusDot({ status }: { status: ModelStatus }) {
+  const colors: Record<ModelStatus, string> = { ready: "#22c55e", downloading: "#f59e0b", not_loaded: "#ffffff30" };
+  return <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${status === "downloading" ? "animate-pulse" : ""}`} style={{ background: colors[status] }} />;
+}
+
+// ─── Generation result card ───────────────────────────────────────────────────
+function GenResult({ type, prompt }: { type: string; prompt: string }) {
+  const configs: Record<string, { icon: string; color: string; preview: React.ReactNode }> = {
+    image: {
+      icon: "Image", color: "#ec4899",
+      preview: (
+        <div className="w-full aspect-square rounded-lg flex items-center justify-center relative overflow-hidden"
+             style={{ background: "linear-gradient(135deg, #1a0520, #2d0a3d, #1a1030)" }}>
+          <div className="absolute inset-0 opacity-30" style={{ backgroundImage: "radial-gradient(circle at 30% 40%, #ec4899 0%, transparent 50%), radial-gradient(circle at 70% 70%, #a855f7 0%, transparent 50%)" }} />
+          <div className="relative text-center">
+            <Icon name="Image" size={28} className="mx-auto mb-2 text-pink-400/60" />
+            <div className="text-[10px] text-white/30 font-rubik px-3">"{prompt}"</div>
+          </div>
+          <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[8px] font-orbitron bg-black/50 text-pink-400">SD 1.5</div>
+        </div>
+      ),
+    },
+    video: {
+      icon: "Video", color: "#f59e0b",
+      preview: (
+        <div className="w-full rounded-lg overflow-hidden relative" style={{ aspectRatio: "16/9", background: "linear-gradient(135deg, #1a1000, #2d1f00)" }}>
+          <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 50% 50%, #f59e0b 0%, transparent 60%)" }} />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-yellow-500/20 border border-yellow-500/40 flex items-center justify-center">
+              <Icon name="Play" size={16} className="text-yellow-400 ml-0.5" />
+            </div>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-6 flex items-center px-2 gap-1" style={{ background: "rgba(0,0,0,0.5)" }}>
+            <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden"><div className="h-full w-1/3 bg-yellow-400 rounded-full" /></div>
+            <span className="text-[8px] text-white/40 font-orbitron">2.4s</span>
+          </div>
+          <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[8px] font-orbitron bg-black/50 text-yellow-400">SVD</div>
+        </div>
+      ),
+    },
+    music: {
+      icon: "Music", color: "#06b6d4",
+      preview: (
+        <div className="w-full rounded-lg p-3" style={{ background: "linear-gradient(135deg, #001a1a, #002d2d)" }}>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center">
+              <Icon name="Music" size={14} className="text-cyan-400" />
+            </div>
+            <div><div className="text-[10px] font-rubik text-cyan-300 truncate max-w-[120px]">"{prompt}"</div>
+              <div className="text-[9px] text-white/30">MusicGen · 30 сек</div></div>
+          </div>
+          <div className="flex items-center gap-0.5 h-8">
+            {Array.from({ length: 40 }).map((_, i) => (
+              <div key={i} className="flex-1 rounded-sm bg-cyan-500/40 animate-pulse"
+                   style={{ height: `${20 + Math.sin(i * 0.7) * 15 + Math.cos(i * 1.3) * 10}%`, animationDelay: `${i * 0.05}s` }} />
+            ))}
+          </div>
+          <div className="flex items-center gap-2 mt-2">
+            <button className="w-6 h-6 rounded-full bg-cyan-500/20 flex items-center justify-center"><Icon name="Play" size={10} className="text-cyan-400 ml-0.5" /></button>
+            <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden"><div className="h-full w-0 bg-cyan-400 rounded-full" /></div>
+            <span className="text-[8px] text-white/30 font-orbitron">0:30</span>
+          </div>
+        </div>
+      ),
+    },
+    "3d": {
+      icon: "Box", color: "#fb923c",
+      preview: (
+        <div className="w-full aspect-square rounded-lg flex items-center justify-center relative overflow-hidden"
+             style={{ background: "linear-gradient(135deg, #1a0a00, #2d1500)" }}>
+          <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 50% 50%, #fb923c 0%, transparent 60%)" }} />
+          <div className="relative flex items-center justify-center w-24 h-24 animate-spin-slow">
+            <div className="absolute w-16 h-16 border-2 border-orange-400/40 rounded-sm" style={{ transform: "rotateX(45deg) rotateZ(45deg)" }} />
+            <div className="absolute w-16 h-16 border-2 border-orange-300/20 rounded-sm" style={{ transform: "rotateX(45deg) rotateZ(0deg)" }} />
+            <Icon name="Box" size={20} className="text-orange-400/70" />
+          </div>
+          <div className="absolute bottom-2 left-2 text-[9px] text-white/30 font-rubik">Shap-E · GLTF</div>
+          <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[8px] font-orbitron bg-black/50 text-orange-400">3D</div>
+        </div>
+      ),
+    },
+    slides: {
+      icon: "Presentation", color: "#60a5fa",
+      preview: (
+        <div className="w-full rounded-lg overflow-hidden" style={{ background: "linear-gradient(135deg, #000d1a, #001a33)" }}>
+          {[
+            { title: prompt, sub: "Автогенерация Zeron AI", type: "title" },
+            { title: "Ключевые тезисы", sub: "• Пункт первый\n• Пункт второй\n• Пункт третий", type: "content" },
+            { title: "Структура", sub: "Введение → Основное → Итоги", type: "content" },
+          ].map((s, i) => (
+            <div key={i} className={`p-2 ${i > 0 ? "border-t border-white/5" : ""} flex items-start gap-2`}>
+              <div className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-[8px] font-orbitron"
+                   style={{ background: "#60a5fa20", color: "#60a5fa", border: "1px solid #60a5fa30" }}>{i + 1}</div>
+              <div>
+                <div className="text-[10px] font-rubik font-semibold text-blue-300 leading-none">{s.title}</div>
+                <div className="text-[9px] text-white/30 mt-0.5 whitespace-pre-line leading-tight">{s.sub}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+  };
+  const cfg = configs[type];
+  if (!cfg) return null;
+  return (
+    <div className="animate-scale-in">
+      <div className="text-[9px] font-orbitron uppercase tracking-wider mb-1.5 flex items-center gap-1" style={{ color: cfg.color }}>
+        <Icon name={cfg.icon} size={9} fallback="Box" />
+        Результат генерации
+      </div>
+      {cfg.preview}
+      <div className="flex gap-1.5 mt-2">
+        <button className="flex-1 flex items-center justify-center gap-1 py-1 rounded-lg text-[10px] font-rubik border transition-all hover:opacity-80"
+                style={{ borderColor: cfg.color + "40", color: cfg.color, background: cfg.color + "10" }}>
+          <Icon name="Download" size={9} />Скачать
+        </button>
+        <button className="flex-1 flex items-center justify-center gap-1 py-1 rounded-lg text-[10px] font-rubik border border-white/10 text-white/40 hover:text-white/60 transition-all">
+          <Icon name="Plus" size={9} />В проект
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Generation panel ─────────────────────────────────────────────────────────
+function GeneratePanel({ type, modelReady }: { type: GenTab; modelReady: boolean }) {
+  const [prompt, setPrompt] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [result, setResult] = useState(false);
+
+  const configs: Partial<Record<GenTab, {
+    title: string; icon: string; color: string; placeholder: string;
+    requiredModel: string; extraFields?: React.ReactNode;
+  }>> = {
+    image: { title: "Генерация изображения", icon: "Image", color: "#ec4899",
+      placeholder: "Опишите изображение... (напр. «огненный дракон на закате»)",
+      requiredModel: "sd15",
+      extraFields: (
+        <div className="flex gap-2">
+          {[["Размер", "512×512"], ["Стиль", "Реализм"], ["Шаги", "20"]].map(([l, v]) => (
+            <div key={l} className="flex-1">
+              <div className="text-[9px] text-white/30 mb-0.5 font-rubik">{l}</div>
+              <div className="text-[10px] bg-white/5 border border-white/8 rounded px-2 py-1 text-white/50 font-rubik cursor-pointer hover:border-white/15 transition-colors">{v}</div>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    video: { title: "Генерация видео", icon: "Video", color: "#f59e0b",
+      placeholder: "Опишите видео... (напр. «волны океана на рассвете»)",
+      requiredModel: "svd",
+      extraFields: (
+        <div className="flex gap-2">
+          {[["Длина", "2–4 сек"], ["FPS", "24"], ["Разм.", "512×320"]].map(([l, v]) => (
+            <div key={l} className="flex-1">
+              <div className="text-[9px] text-white/30 mb-0.5 font-rubik">{l}</div>
+              <div className="text-[10px] bg-white/5 border border-white/8 rounded px-2 py-1 text-white/50 font-rubik">{v}</div>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    music: { title: "Генерация музыки", icon: "Music", color: "#06b6d4",
+      placeholder: "Описание трека... (напр. «эпическая оркестровая музыка с барабанами»)",
+      requiredModel: "musicgen",
+      extraFields: (
+        <div className="flex gap-2">
+          {[["Длина", "30 сек"], ["Темп", "120 BPM"], ["Жанр", "Авто"]].map(([l, v]) => (
+            <div key={l} className="flex-1">
+              <div className="text-[9px] text-white/30 mb-0.5 font-rubik">{l}</div>
+              <div className="text-[10px] bg-white/5 border border-white/8 rounded px-2 py-1 text-white/50 font-rubik">{v}</div>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    "3d": { title: "Генерация 3D модели", icon: "Box", color: "#fb923c",
+      placeholder: "Опишите объект... (напр. «деревянный стул со спинкой»)",
+      requiredModel: "shape",
+      extraFields: (
+        <div className="flex gap-2">
+          {[["Формат", "GLTF"], ["Качество", "Среднее"], ["Текстура", "Да"]].map(([l, v]) => (
+            <div key={l} className="flex-1">
+              <div className="text-[9px] text-white/30 mb-0.5 font-rubik">{l}</div>
+              <div className="text-[10px] bg-white/5 border border-white/8 rounded px-2 py-1 text-white/50 font-rubik">{v}</div>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    slides: { title: "Генерация презентации", icon: "Presentation", color: "#60a5fa",
+      placeholder: "Тема презентации... (напр. «Введение в Python для детей»)",
+      requiredModel: "llama3",
+      extraFields: (
+        <div className="flex gap-2">
+          {[["Слайдов", "8"], ["Язык", "Русский"], ["Стиль", "Деловой"]].map(([l, v]) => (
+            <div key={l} className="flex-1">
+              <div className="text-[9px] text-white/30 mb-0.5 font-rubik">{l}</div>
+              <div className="text-[10px] bg-white/5 border border-white/8 rounded px-2 py-1 text-white/50 font-rubik">{v}</div>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+  };
+
+  const cfg = configs[type];
+  if (!cfg) return null;
+
+  const handleGenerate = () => {
+    if (!prompt.trim()) return;
+    setGenerating(true);
+    setResult(false);
+    setTimeout(() => { setGenerating(false); setResult(true); }, 2200);
+  };
+
+  return (
+    <div className="flex flex-col gap-3 p-3 h-full overflow-y-auto">
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: cfg.color + "20", border: `1px solid ${cfg.color}40` }}>
+          <Icon name={cfg.icon} size={14} fallback="Box" style={{ color: cfg.color }} />
+        </div>
+        <div>
+          <div className="text-[12px] font-orbitron font-bold" style={{ color: cfg.color }}>{cfg.title}</div>
+          <div className="text-[9px] text-white/30">офлайн · ONNX Runtime</div>
+        </div>
+        {!modelReady && (
+          <div className="ml-auto text-[9px] px-2 py-0.5 rounded-full border font-rubik" style={{ borderColor: "#f59e0b40", color: "#f59e0b", background: "#f59e0b10" }}>
+            Модель не загружена
+          </div>
+        )}
+      </div>
+
+      <textarea
+        value={prompt}
+        onChange={e => setPrompt(e.target.value)}
+        placeholder={cfg.placeholder}
+        rows={3}
+        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[11px] font-rubik text-white/70 placeholder:text-white/20 focus:outline-none resize-none transition-colors"
+        style={{ focusBorderColor: cfg.color } as React.CSSProperties}
+        onFocus={e => e.target.style.borderColor = cfg.color + "60"}
+        onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
+      />
+
+      {cfg.extraFields}
+
+      <button
+        onClick={handleGenerate}
+        disabled={!prompt.trim() || generating}
+        className="w-full py-2 rounded-xl text-[11px] font-orbitron font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-40"
+        style={{ background: generating ? cfg.color + "30" : `linear-gradient(135deg, ${cfg.color}cc, ${cfg.color}88)`, color: "#fff", border: `1px solid ${cfg.color}60` }}
+      >
+        {generating ? (
+          <>
+            <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+            Генерирую...
+          </>
+        ) : (
+          <>
+            <Icon name="Wand2" size={12} />
+            Сгенерировать
+          </>
+        )}
+      </button>
+
+      {result && <GenResult type={type} prompt={prompt} />}
+    </div>
+  );
+}
+
 function AIPanel() {
+  const [aiTab, setAiTab] = useState<GenTab>("chat");
+  const [models, setModels] = useState<LocalModel[]>(INITIAL_MODELS);
   const [messages, setMessages] = useState([
     { role: "ai", text: "Привет! Я Zeron AI на базе Llama 3. Работаю полностью офлайн. Что создадим?" },
     { role: "user", text: "Сделай мне игру с физикой и персонажем" },
     { role: "ai", text: "Отличная идея! Создаю блоки: Старт → Добавить персонажа (3D куб) → Гравитация → Джойстик управления → Столкновение с землёй. Добавить ещё эффект пыли при приземлении?" },
   ]);
   const [input, setInput] = useState("");
-  const autocomplete = ["position.x", "rotation.y", "velocity", "microphone.volume", "sin(", "lerp(", "и мои блоки"];
+  const [modelFilter, setModelFilter] = useState("all");
+  const autocomplete = ["position.x", "rotation.y", "velocity", "microphone.volume", "sin(", "lerp("];
+
+  const handleDownload = (id: string) => {
+    setModels(prev => prev.map(m => m.id === id ? { ...m, status: "downloading", progress: 0 } : m));
+    let p = 0;
+    const iv = setInterval(() => {
+      p += Math.random() * 8 + 3;
+      if (p >= 100) { p = 100; clearInterval(iv);
+        setModels(prev => prev.map(m => m.id === id ? { ...m, status: "ready", progress: 100 } : m));
+      } else {
+        setModels(prev => prev.map(m => m.id === id ? { ...m, progress: Math.round(p) } : m));
+      }
+    }, 300);
+  };
+
+  const tabs: { id: GenTab; icon: string; label: string; color: string }[] = [
+    { id: "chat",   icon: "MessageSquare", label: "Чат",       color: "#a855f7" },
+    { id: "models", icon: "Cpu",           label: "Модели",    color: "#6366f1" },
+    { id: "image",  icon: "Image",         label: "Фото",      color: "#ec4899" },
+    { id: "video",  icon: "Video",         label: "Видео",     color: "#f59e0b" },
+    { id: "music",  icon: "Music",         label: "Музыка",    color: "#06b6d4" },
+    { id: "3d",     icon: "Box",           label: "3D",        color: "#fb923c" },
+    { id: "slides", icon: "Presentation",  label: "Слайды",    color: "#60a5fa" },
+  ];
+
+  const filterTags = ["all", "LLM", "Фото", "Видео", "3D", "Музыка", "Речь", "Камера", "Звук"];
+  const filteredModels = models.filter(m => modelFilter === "all" || m.tag === modelFilter);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="px-3 py-2 border-b border-white/5 flex items-center gap-2">
+      <div className="px-3 py-2 border-b border-white/5 flex items-center gap-2 flex-shrink-0">
         <div className="w-6 h-6 rounded-lg gradient-brand flex items-center justify-center animate-pulse-glow">
           <Icon name="Brain" size={12} className="text-white" />
         </div>
         <div>
           <div className="text-[11px] font-orbitron font-bold text-zeron-purple">Zeron AI</div>
-          <div className="text-[9px] text-white/30">Llama 3 · офлайн</div>
+          <div className="text-[9px] text-white/30">
+            {models.filter(m => m.status === "ready").length} моделей · офлайн
+          </div>
         </div>
         <div className="ml-auto flex items-center gap-1">
           <div className="w-1.5 h-1.5 rounded-full bg-zeron-green animate-pulse" />
@@ -415,54 +752,161 @@ function AIPanel() {
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div
-              className="max-w-[85%] px-2.5 py-2 rounded-xl text-[11px] font-rubik leading-relaxed"
-              style={{
-                background: m.role === "ai" ? "rgba(168,85,247,0.12)" : "rgba(249,115,22,0.12)",
-                border: `1px solid ${m.role === "ai" ? "rgba(168,85,247,0.25)" : "rgba(249,115,22,0.25)"}`,
-                color: m.role === "ai" ? "#c084fc" : "#fb923c",
-              }}
-            >
-              {m.text}
+      {/* Tab strip — scrollable */}
+      <div className="flex gap-0.5 px-2 py-1.5 border-b border-white/5 overflow-x-auto flex-shrink-0" style={{ scrollbarWidth: "none" }}>
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setAiTab(t.id)}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-rubik whitespace-nowrap transition-all flex-shrink-0"
+            style={{
+              background: aiTab === t.id ? t.color + "22" : "transparent",
+              color: aiTab === t.id ? t.color : "rgba(255,255,255,0.35)",
+              border: `1px solid ${aiTab === t.id ? t.color + "50" : "transparent"}`,
+            }}>
+            <Icon name={t.icon} size={10} fallback="Box" />
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+
+        {/* ── Чат ── */}
+        {aiTab === "chat" && (
+          <div className="flex flex-col h-full">
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {messages.map((m, i) => (
+                <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className="max-w-[85%] px-2.5 py-2 rounded-xl text-[11px] font-rubik leading-relaxed"
+                    style={{
+                      background: m.role === "ai" ? "rgba(168,85,247,0.12)" : "rgba(249,115,22,0.12)",
+                      border: `1px solid ${m.role === "ai" ? "rgba(168,85,247,0.25)" : "rgba(249,115,22,0.25)"}`,
+                      color: m.role === "ai" ? "#c084fc" : "#fb923c",
+                    }}>{m.text}</div>
+                </div>
+              ))}
+            </div>
+            <div className="px-3 pb-1 flex flex-wrap gap-1">
+              {autocomplete.map(a => (
+                <button key={a} onClick={() => setInput(a)}
+                  className="text-[9px] px-1.5 py-0.5 rounded border border-white/10 text-white/30 hover:text-white/60 hover:border-white/25 transition-colors font-rubik">{a}</button>
+              ))}
+            </div>
+            <div className="px-3 pb-3 flex gap-1.5">
+              <input value={input} onChange={e => setInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && input.trim()) {
+                    setMessages(prev => [...prev, { role: "user", text: input }]);
+                    setInput("");
+                    setTimeout(() => setMessages(prev => [...prev, { role: "ai", text: "Генерирую блоки для вашего запроса..." }]), 600);
+                  }
+                }}
+                placeholder="Спросите ИИ..."
+                className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-[11px] font-rubik text-white/70 placeholder:text-white/20 focus:outline-none focus:border-zeron-purple/50 transition-colors" />
+              <button className="w-8 h-8 rounded-lg gradient-brand flex items-center justify-center hover:opacity-90 transition-opacity flex-shrink-0">
+                <Icon name="Send" size={12} className="text-white" />
+              </button>
             </div>
           </div>
-        ))}
-      </div>
+        )}
 
-      {/* Autocomplete hints */}
-      <div className="px-3 pb-1 flex flex-wrap gap-1">
-        {autocomplete.map(a => (
-          <button key={a} onClick={() => setInput(a)}
-            className="text-[9px] px-1.5 py-0.5 rounded border border-white/10 text-white/30 hover:text-white/60 hover:border-white/25 transition-colors font-rubik">
-            {a}
-          </button>
-        ))}
-      </div>
+        {/* ── Менеджер моделей ── */}
+        {aiTab === "models" && (
+          <div className="flex flex-col h-full">
+            {/* Filter chips */}
+            <div className="flex gap-1 px-3 pt-2 pb-1 flex-wrap flex-shrink-0">
+              {filterTags.map(tag => (
+                <button key={tag} onClick={() => setModelFilter(tag)}
+                  className="text-[9px] px-2 py-0.5 rounded-full border font-rubik transition-all"
+                  style={{
+                    borderColor: modelFilter === tag ? "#a855f7" : "rgba(255,255,255,0.1)",
+                    color: modelFilter === tag ? "#c084fc" : "rgba(255,255,255,0.35)",
+                    background: modelFilter === tag ? "rgba(168,85,247,0.12)" : "transparent",
+                  }}>
+                  {tag === "all" ? "Все" : tag}
+                </button>
+              ))}
+            </div>
+            {/* Model list */}
+            <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2">
+              {filteredModels.map(m => (
+                <div key={m.id} className="rounded-xl p-2.5 transition-all"
+                  style={{ background: m.color + "0d", border: `1px solid ${m.color}25` }}>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                         style={{ background: m.color + "20", border: `1px solid ${m.color}30` }}>
+                      <Icon name={m.icon} size={15} fallback="Box" style={{ color: m.color }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-rubik font-semibold text-white/80 truncate">{m.name}</span>
+                        <span className="text-[8px] px-1 py-0.5 rounded flex-shrink-0 font-orbitron"
+                              style={{ background: m.color + "20", color: m.color }}>{m.tag}</span>
+                      </div>
+                      <div className="text-[9px] text-white/30 truncate">{m.desc}</div>
+                    </div>
+                    <div className="flex-shrink-0 text-right">
+                      <div className="text-[9px] font-orbitron text-white/25">{m.size}</div>
+                      <StatusDot status={m.status} />
+                    </div>
+                  </div>
 
-      {/* Input */}
-      <div className="px-3 pb-3">
-        <div className="flex gap-1.5">
-          <input
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === "Enter" && input.trim()) {
-                setMessages(prev => [...prev, { role: "user", text: input }]);
-                setInput("");
-                setTimeout(() => setMessages(prev => [...prev, { role: "ai", text: "Генерирую блоки для вашего запроса..." }]), 600);
-              }
-            }}
-            placeholder="Спросите ИИ..."
-            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-[11px] font-rubik text-white/70 placeholder:text-white/20 focus:outline-none focus:border-zeron-purple/50 transition-colors"
+                  {/* Progress bar */}
+                  {m.status === "downloading" && (
+                    <div className="mt-2">
+                      <div className="flex justify-between mb-0.5">
+                        <span className="text-[9px] text-white/30 font-rubik">Загрузка...</span>
+                        <span className="text-[9px] font-orbitron" style={{ color: m.color }}>{m.progress}%</span>
+                      </div>
+                      <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-300"
+                             style={{ width: `${m.progress}%`, background: m.color }} />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action */}
+                  {m.status !== "downloading" && (
+                    <div className="mt-2 flex gap-1.5">
+                      {m.status === "not_loaded" ? (
+                        <button onClick={() => handleDownload(m.id)}
+                          className="flex-1 py-1 rounded-lg text-[10px] font-rubik flex items-center justify-center gap-1 transition-all hover:opacity-80"
+                          style={{ background: m.color + "20", color: m.color, border: `1px solid ${m.color}40` }}>
+                          <Icon name="Download" size={10} />Загрузить
+                        </button>
+                      ) : (
+                        <>
+                          <div className="flex-1 py-1 rounded-lg text-[10px] font-rubik flex items-center justify-center gap-1"
+                               style={{ background: "#22c55e15", color: "#4ade80", border: "1px solid #22c55e30" }}>
+                            <Icon name="Check" size={10} />
+                            {STATUS_LABEL[m.status]}
+                          </div>
+                          <button className="px-2 py-1 rounded-lg text-[10px] border border-white/10 text-white/30 hover:text-white/50 transition-all">
+                            <Icon name="Trash2" size={10} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Генерация ── */}
+        {(aiTab === "image" || aiTab === "video" || aiTab === "music" || aiTab === "3d" || aiTab === "slides") && (
+          <GeneratePanel
+            type={aiTab}
+            modelReady={models.some(m =>
+              (aiTab === "image" && m.id === "sd15" && m.status === "ready") ||
+              (aiTab === "video" && m.id === "svd" && m.status === "ready") ||
+              (aiTab === "music" && m.id === "musicgen" && m.status === "ready") ||
+              (aiTab === "3d" && m.id === "shape" && m.status === "ready") ||
+              (aiTab === "slides" && m.id === "llama3" && m.status === "ready")
+            )}
           />
-          <button className="w-8 h-8 rounded-lg gradient-brand flex items-center justify-center hover:opacity-90 transition-opacity flex-shrink-0">
-            <Icon name="Send" size={12} className="text-white" />
-          </button>
-        </div>
+        )}
       </div>
     </div>
   );
