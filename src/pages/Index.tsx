@@ -45,13 +45,30 @@ const CATEGORY_META: Record<BlockCategory, { label: string; icon: string; color:
 
 const BLOCK_DEFS: BlockDef[] = [
   // Events
-  { id: "ev_start",     category: "events",   icon: "Play",         label: "Старт",              description: "Запускается при старте сцены" },
-  { id: "ev_click",     category: "events",   icon: "MousePointer", label: "Клик на объект",     description: "При нажатии на 3D объект" },
-  { id: "ev_collision", category: "events",   icon: "Zap",          label: "Столкновение",        description: "При физическом столкновении" },
-  { id: "ev_wait",      category: "events",   icon: "Hourglass",    label: "Ждать",               description: "Пауза N секунд, затем сигнал" },
-  { id: "ev_repeat",    category: "events",   icon: "Repeat",       label: "Повторить",           description: "Выполнить вложенные блоки N раз" },
-  { id: "ev_forever",   category: "events",   icon: "Infinity",     label: "Вечно повторять",     description: "Бесконечный цикл до остановки" },
-  { id: "ev_key",       category: "events",   icon: "Keyboard",     label: "Клавиша",             description: "При нажатии клавиши" },
+  // ── Триггеры ──
+  { id: "ev_start",       category: "events", icon: "Play",           label: "Старт",               description: "Запускается при старте сцены" },
+  { id: "ev_click",       category: "events", icon: "MousePointer",   label: "Клик на объект",      description: "При нажатии на 3D объект" },
+  { id: "ev_collision",   category: "events", icon: "Zap",            label: "Столкновение",        description: "При физическом столкновении" },
+  { id: "ev_key",         category: "events", icon: "Keyboard",       label: "Клавиша",             description: "При нажатии клавиши" },
+  // ── Управление потоком ──
+  { id: "ev_wait",        category: "events", icon: "Hourglass",      label: "Ждать",               description: "Пауза N секунд, затем сигнал" },
+  { id: "ev_wait_until",  category: "events", icon: "Clock",          label: "Ждать пока ложь",     description: "Ждёт, пока условие не станет ложным" },
+  { id: "ev_repeat",      category: "events", icon: "Repeat",         label: "Повторить",           description: "Выполнить вложенные блоки N раз" },
+  { id: "ev_forever",     category: "events", icon: "Infinity",       label: "Вечно повторять",     description: "Бесконечный цикл до остановки" },
+  { id: "ev_stop",        category: "events", icon: "OctagonX",       label: "Остановить",          description: "Немедленно останавливает скрипт" },
+  // ── Условия ──
+  { id: "ev_if",          category: "events", icon: "GitBranch",      label: "Если ... то",         description: "Выполняет блоки если условие истинно" },
+  { id: "ev_if_else",     category: "events", icon: "GitFork",        label: "Если ... иначе",      description: "Две ветки: когда истина и когда ложь" },
+  // ── Сцены ──
+  { id: "ev_scene_new",   category: "events", icon: "FilePlus",       label: "Создать сцену",       description: "Добавить новую сцену в проект" },
+  { id: "ev_scene_run",   category: "events", icon: "MonitorPlay",    label: "Запустить сцену",     description: "Перейти и запустить сцену по имени" },
+  { id: "ev_scene_next",  category: "events", icon: "SkipForward",    label: "Продолжить сцену",    description: "Перейти к следующей сцене" },
+  // ── Клоны ──
+  { id: "ev_clone",       category: "events", icon: "Copy",           label: "Клонировать",         description: "Создать копию объекта" },
+  { id: "ev_delete_clone",category: "events", icon: "Trash2",         label: "Удалить клон",        description: "Удалить этот клон объекта" },
+  // ── Сообщения ──
+  { id: "ev_broadcast",   category: "events", icon: "Radio",          label: "Вещать",              description: "Отправить сигнал всем объектам" },
+  { id: "ev_on_message",  category: "events", icon: "Bell",           label: "Получен сигнал",      description: "Срабатывает когда получен вещаемый сигнал" },
   // Sound
   { id: "snd_note",     category: "sound",    icon: "Music",        label: "Синтез ноты",         description: "Воспроизвести ноту Web Audio" },
   { id: "snd_beat",     category: "sound",    icon: "Activity",     label: "Beat Detection",      description: "Определить ритм из аудио" },
@@ -264,12 +281,22 @@ function CanvasBlock({ block, def, selected, onClick, onParamChange, params }: {
   params?: Record<string, string>;
 }) {
   const meta = CATEGORY_META[def.category];
-  const isWait    = def.id === "ev_wait";
-  const isRepeat  = def.id === "ev_repeat";
-  const isForever = def.id === "ev_forever";
-  const isAiImage = def.id === "ai_image";
-  const isAiVideo = def.id === "ai_video";
-  const isSpecial = isWait || isRepeat || isForever || isAiImage || isAiVideo;
+  const isWait       = def.id === "ev_wait";
+  const isWaitUntil  = def.id === "ev_wait_until";
+  const isRepeat     = def.id === "ev_repeat";
+  const isForever    = def.id === "ev_forever";
+  const isStop       = def.id === "ev_stop";
+  const isIf         = def.id === "ev_if";
+  const isIfElse     = def.id === "ev_if_else";
+  const isSceneRun   = def.id === "ev_scene_run";
+  const isClone      = def.id === "ev_clone";
+  const isBroadcast  = def.id === "ev_broadcast";
+  const isOnMessage  = def.id === "ev_on_message";
+  const isAiImage    = def.id === "ai_image";
+  const isAiVideo    = def.id === "ai_video";
+  const isSpecial    = isWait || isWaitUntil || isRepeat || isForever || isStop
+    || isIf || isIfElse || isSceneRun || isClone || isBroadcast || isOnMessage
+    || isAiImage || isAiVideo;
 
   return (
     <div
@@ -353,6 +380,164 @@ function CanvasBlock({ block, def, selected, onClick, onParamChange, params }: {
               <span className="text-[9px] font-rubik italic" style={{ color: meta.color.text + "50" }}>вложенные блоки...</span>
             </div>
             <div className="w-8 h-1.5 rounded-sm mt-1" style={{ background: meta.color.border + "40" }} />
+          </div>
+        )}
+
+        {/* ── Ждать пока ложь ── */}
+        {isWaitUntil && (
+          <div className="mt-2 space-y-1.5">
+            <div className="text-[9px] font-rubik mb-1" style={{ color: meta.color.text + "70" }}>пока условие ложно:</div>
+            <div className="flex items-center gap-1">
+              <input placeholder="перем. A" defaultValue={params?.varA ?? ""} onClick={e => e.stopPropagation()}
+                onChange={e => onParamChange?.(block.id, "varA", e.target.value)}
+                className="flex-1 bg-black/30 border rounded px-1.5 py-0.5 text-[10px] font-mono outline-none"
+                style={{ borderColor: meta.color.border + "40", color: meta.color.text }} />
+              <select defaultValue={params?.op ?? ">"} onClick={e => e.stopPropagation()}
+                onChange={e => onParamChange?.(block.id, "op", e.target.value)}
+                className="bg-black/40 border rounded px-1 py-0.5 text-[10px] font-mono outline-none"
+                style={{ borderColor: meta.color.border + "40", color: meta.color.text }}>
+                {[">","<","=","≥","≤","≠"].map(o => <option key={o}>{o}</option>)}
+              </select>
+              <input placeholder="перем. B" defaultValue={params?.varB ?? ""} onClick={e => e.stopPropagation()}
+                onChange={e => onParamChange?.(block.id, "varB", e.target.value)}
+                className="flex-1 bg-black/30 border rounded px-1.5 py-0.5 text-[10px] font-mono outline-none"
+                style={{ borderColor: meta.color.border + "40", color: meta.color.text }} />
+            </div>
+            <div className="flex items-center gap-1 text-[9px] font-rubik" style={{ color: meta.color.text + "55" }}>
+              <Icon name="Clock" size={9} />→ продолжит когда условие станет ложным
+            </div>
+          </div>
+        )}
+
+        {/* ── Остановить ── */}
+        {isStop && (
+          <div className="mt-2">
+            <select defaultValue={params?.target ?? "этот скрипт"} onClick={e => e.stopPropagation()}
+              onChange={e => onParamChange?.(block.id, "target", e.target.value)}
+              className="w-full bg-black/30 border rounded-lg px-2 py-1 text-[10px] font-rubik outline-none"
+              style={{ borderColor: meta.color.border + "40", color: meta.color.text }}>
+              {["этот скрипт", "все скрипты объекта", "все скрипты сцены"].map(o => <option key={o}>{o}</option>)}
+            </select>
+            <div className="mt-1.5 flex items-center gap-1 text-[9px] font-rubik" style={{ color: "#f87171aa" }}>
+              <Icon name="OctagonX" size={9} />выполнение немедленно прекращается
+            </div>
+          </div>
+        )}
+
+        {/* ── Если ... то ── */}
+        {isIf && (
+          <div className="mt-2 space-y-1.5">
+            <div className="text-[9px] font-rubik" style={{ color: meta.color.text + "70" }}>если:</div>
+            <div className="flex items-center gap-1">
+              <input placeholder="A" defaultValue={params?.varA ?? ""} onClick={e => e.stopPropagation()}
+                onChange={e => onParamChange?.(block.id, "varA", e.target.value)}
+                className="flex-1 bg-black/30 border rounded px-1.5 py-0.5 text-[10px] font-mono outline-none"
+                style={{ borderColor: meta.color.border + "40", color: meta.color.text }} />
+              <select defaultValue={params?.op ?? ">"} onClick={e => e.stopPropagation()}
+                onChange={e => onParamChange?.(block.id, "op", e.target.value)}
+                className="bg-black/40 border rounded px-1 py-0.5 text-[10px] font-mono outline-none"
+                style={{ borderColor: meta.color.border + "40", color: meta.color.text }}>
+                {[">","<","=","≥","≤","≠"].map(o => <option key={o}>{o}</option>)}
+              </select>
+              <input placeholder="B" defaultValue={params?.varB ?? ""} onClick={e => e.stopPropagation()}
+                onChange={e => onParamChange?.(block.id, "varB", e.target.value)}
+                className="flex-1 bg-black/30 border rounded px-1.5 py-0.5 text-[10px] font-mono outline-none"
+                style={{ borderColor: meta.color.border + "40", color: meta.color.text }} />
+            </div>
+            <div className="ml-1 flex items-stretch gap-1.5">
+              <div className="w-1 rounded-full" style={{ background: meta.color.border + "50", minHeight: 20 }} />
+              <span className="text-[9px] font-rubik italic" style={{ color: meta.color.text + "50" }}>то → вложенные блоки...</span>
+            </div>
+            <div className="w-8 h-1.5 rounded-sm" style={{ background: meta.color.border + "40" }} />
+          </div>
+        )}
+
+        {/* ── Если ... иначе ── */}
+        {isIfElse && (
+          <div className="mt-2 space-y-1.5">
+            <div className="text-[9px] font-rubik" style={{ color: meta.color.text + "70" }}>если:</div>
+            <div className="flex items-center gap-1">
+              <input placeholder="A" defaultValue={params?.varA ?? ""} onClick={e => e.stopPropagation()}
+                onChange={e => onParamChange?.(block.id, "varA", e.target.value)}
+                className="flex-1 bg-black/30 border rounded px-1.5 py-0.5 text-[10px] font-mono outline-none"
+                style={{ borderColor: meta.color.border + "40", color: meta.color.text }} />
+              <select defaultValue={params?.op ?? ">"} onClick={e => e.stopPropagation()}
+                onChange={e => onParamChange?.(block.id, "op", e.target.value)}
+                className="bg-black/40 border rounded px-1 py-0.5 text-[10px] font-mono outline-none"
+                style={{ borderColor: meta.color.border + "40", color: meta.color.text }}>
+                {[">","<","=","≥","≤","≠"].map(o => <option key={o}>{o}</option>)}
+              </select>
+              <input placeholder="B" defaultValue={params?.varB ?? ""} onClick={e => e.stopPropagation()}
+                onChange={e => onParamChange?.(block.id, "varB", e.target.value)}
+                className="flex-1 bg-black/30 border rounded px-1.5 py-0.5 text-[10px] font-mono outline-none"
+                style={{ borderColor: meta.color.border + "40", color: meta.color.text }} />
+            </div>
+            <div className="ml-1 flex items-stretch gap-1.5">
+              <div className="w-1 rounded-full" style={{ background: meta.color.border + "50", minHeight: 16 }} />
+              <span className="text-[9px] font-rubik italic" style={{ color: meta.color.text + "50" }}>то → вложенные блоки...</span>
+            </div>
+            <div className="w-8 h-1.5 rounded-sm" style={{ background: meta.color.border + "40" }} />
+            <div className="ml-1 flex items-stretch gap-1.5">
+              <div className="w-1 rounded-full" style={{ background: "#f8717180", minHeight: 16 }} />
+              <span className="text-[9px] font-rubik italic text-red-400/50">иначе → вложенные блоки...</span>
+            </div>
+            <div className="w-8 h-1.5 rounded-sm" style={{ background: meta.color.border + "40" }} />
+          </div>
+        )}
+
+        {/* ── Запустить сцену ── */}
+        {isSceneRun && (
+          <div className="mt-2 space-y-1.5">
+            <input placeholder="Имя сцены..." defaultValue={params?.scene ?? ""} onClick={e => e.stopPropagation()}
+              onChange={e => onParamChange?.(block.id, "scene", e.target.value)}
+              className="w-full bg-black/30 border rounded-lg px-2 py-1 text-[10px] font-rubik outline-none"
+              style={{ borderColor: meta.color.border + "40", color: meta.color.text }} />
+            <div className="flex items-center gap-1 text-[9px] font-rubik" style={{ color: meta.color.text + "55" }}>
+              <Icon name="MonitorPlay" size={9} />→ переход к сцене немедленно
+            </div>
+          </div>
+        )}
+
+        {/* ── Клонировать ── */}
+        {isClone && (
+          <div className="mt-2 space-y-1.5">
+            <select defaultValue={params?.target ?? "себя"} onClick={e => e.stopPropagation()}
+              onChange={e => onParamChange?.(block.id, "target", e.target.value)}
+              className="w-full bg-black/30 border rounded-lg px-2 py-1 text-[10px] font-rubik outline-none"
+              style={{ borderColor: meta.color.border + "40", color: meta.color.text }}>
+              {["себя", "Персонаж", "Враг", "Пуля", "Частица"].map(o => <option key={o}>{o}</option>)}
+            </select>
+            <div className="flex items-center gap-1 text-[9px] font-rubik" style={{ color: meta.color.text + "55" }}>
+              <Icon name="Copy" size={9} />→ клон наследует все свойства
+            </div>
+          </div>
+        )}
+
+        {/* ── Вещать ── */}
+        {isBroadcast && (
+          <div className="mt-2 space-y-1.5">
+            <input placeholder="Имя сигнала..." defaultValue={params?.signal ?? ""} onClick={e => e.stopPropagation()}
+              onChange={e => onParamChange?.(block.id, "signal", e.target.value)}
+              className="w-full bg-black/30 border rounded-lg px-2 py-1 text-[10px] font-rubik outline-none"
+              style={{ borderColor: meta.color.border + "40", color: meta.color.text }} />
+            <div className="flex items-center gap-1 text-[9px] font-rubik" style={{ color: meta.color.text + "55" }}>
+              <Icon name="Radio" size={9} />→ все объекты получат сигнал
+            </div>
+          </div>
+        )}
+
+        {/* ── Получен сигнал ── */}
+        {isOnMessage && (
+          <div className="mt-2 space-y-1.5">
+            <input placeholder="Имя сигнала..." defaultValue={params?.signal ?? ""} onClick={e => e.stopPropagation()}
+              onChange={e => onParamChange?.(block.id, "signal", e.target.value)}
+              className="w-full bg-black/30 border rounded-lg px-2 py-1 text-[10px] font-rubik outline-none"
+              style={{ borderColor: meta.color.border + "40", color: meta.color.text }} />
+            <div className="ml-1 flex items-stretch gap-1.5">
+              <div className="w-1 rounded-full" style={{ background: meta.color.border + "50", minHeight: 20 }} />
+              <span className="text-[9px] font-rubik italic" style={{ color: meta.color.text + "50" }}>выполнить блоки...</span>
+            </div>
+            <div className="w-8 h-1.5 rounded-sm" style={{ background: meta.color.border + "40" }} />
           </div>
         )}
 
@@ -1058,8 +1243,16 @@ export default function Index() {
     const x = e.clientX - rect.left - 80;
     const y = e.clientY - rect.top - 20;
     const defaults: Record<string, Record<string, string>> = {
-      ev_wait:   { seconds: "2" },
-      ev_repeat: { times: "3" },
+      ev_wait:        { seconds: "2" },
+      ev_wait_until:  { varA: "hp", op: ">", varB: "0" },
+      ev_repeat:      { times: "3" },
+      ev_stop:        { target: "этот скрипт" },
+      ev_if:          { varA: "score", op: ">", varB: "10" },
+      ev_if_else:     { varA: "lives", op: ">", varB: "0" },
+      ev_scene_run:   { scene: "Уровень 2" },
+      ev_clone:       { target: "себя" },
+      ev_broadcast:   { signal: "game_over" },
+      ev_on_message:  { signal: "game_over" },
     };
     const newBlock: PlacedBlock = {
       id: `b${Date.now()}`,
