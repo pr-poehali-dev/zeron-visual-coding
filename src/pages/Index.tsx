@@ -92,6 +92,8 @@ const BLOCK_DEFS: BlockDef[] = [
   { id: "ai_codegen",   category: "ai",       icon: "Wand2",        label: "Сгенерировать код",   description: "LLM пишет JS/Python блок" },
   { id: "ai_melody",    category: "ai",       icon: "Piano",        label: "Мелодия AI",          description: "MusicGen — сгенерировать трек" },
   { id: "ai_texture",   category: "ai",       icon: "Image",        label: "Текстура AI",         description: "Stable Diffusion — текстура" },
+  { id: "ai_image",     category: "ai",       icon: "ImagePlus",    label: "Сгенерировать фото",  description: "SD локально — фото/арт по тексту" },
+  { id: "ai_video",     category: "ai",       icon: "Clapperboard", label: "Сгенерировать видео", description: "SVD локально — видеоклип по тексту" },
   { id: "ai_shape",     category: "ai",       icon: "Shapes",       label: "3D модель AI",        description: "Shap-E — модель из текста" },
   { id: "ai_tts",       category: "ai",       icon: "Volume2",      label: "Озвучить текст",      description: "TTS — голосовой синтез" },
   // Code
@@ -265,7 +267,9 @@ function CanvasBlock({ block, def, selected, onClick, onParamChange, params }: {
   const isWait    = def.id === "ev_wait";
   const isRepeat  = def.id === "ev_repeat";
   const isForever = def.id === "ev_forever";
-  const isSpecial = isWait || isRepeat || isForever;
+  const isAiImage = def.id === "ai_image";
+  const isAiVideo = def.id === "ai_video";
+  const isSpecial = isWait || isRepeat || isForever || isAiImage || isAiVideo;
 
   return (
     <div
@@ -349,6 +353,56 @@ function CanvasBlock({ block, def, selected, onClick, onParamChange, params }: {
               <span className="text-[9px] font-rubik italic" style={{ color: meta.color.text + "50" }}>вложенные блоки...</span>
             </div>
             <div className="w-8 h-1.5 rounded-sm mt-1" style={{ background: meta.color.border + "40" }} />
+          </div>
+        )}
+
+        {/* ── Сгенерировать фото ── */}
+        {isAiImage && (
+          <div className="mt-2 space-y-1.5">
+            <input
+              placeholder="Опишите изображение..."
+              defaultValue={params?.prompt ?? ""}
+              onClick={e => e.stopPropagation()}
+              onChange={e => onParamChange?.(block.id, "prompt", e.target.value)}
+              className="w-full bg-black/30 border rounded-lg px-2 py-1 text-[10px] font-rubik outline-none transition-all"
+              style={{ borderColor: meta.color.border + "40", color: meta.color.text, caretColor: meta.color.text, placeholder: meta.color.text + "40" }}
+            />
+            <div className="flex gap-1">
+              {[["Размер", "512×512"], ["Шаги", "20"]].map(([l, v]) => (
+                <div key={l} className="flex-1 px-1.5 py-1 rounded text-[9px] font-rubik text-center"
+                     style={{ background: meta.color.border + "15", color: meta.color.text + "80", border: `1px solid ${meta.color.border}25` }}>
+                  {l}: <span style={{ color: meta.color.text }}>{v}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-1 text-[9px] font-rubik" style={{ color: meta.color.text + "55" }}>
+              <Icon name="ImagePlus" size={9} />→ результат в переменную image
+            </div>
+          </div>
+        )}
+
+        {/* ── Сгенерировать видео ── */}
+        {isAiVideo && (
+          <div className="mt-2 space-y-1.5">
+            <input
+              placeholder="Опишите видеоклип..."
+              defaultValue={params?.prompt ?? ""}
+              onClick={e => e.stopPropagation()}
+              onChange={e => onParamChange?.(block.id, "prompt", e.target.value)}
+              className="w-full bg-black/30 border rounded-lg px-2 py-1 text-[10px] font-rubik outline-none transition-all"
+              style={{ borderColor: meta.color.border + "40", color: meta.color.text, caretColor: meta.color.text }}
+            />
+            <div className="flex gap-1">
+              {[["Длина", "2–4 с"], ["FPS", "24"]].map(([l, v]) => (
+                <div key={l} className="flex-1 px-1.5 py-1 rounded text-[9px] font-rubik text-center"
+                     style={{ background: meta.color.border + "15", color: meta.color.text + "80", border: `1px solid ${meta.color.border}25` }}>
+                  {l}: <span style={{ color: meta.color.text }}>{v}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-1 text-[9px] font-rubik" style={{ color: meta.color.text + "55" }}>
+              <Icon name="Clapperboard" size={9} />→ результат в переменную video
+            </div>
           </div>
         )}
       </div>
