@@ -1225,6 +1225,8 @@ export default function Index() {
   const [placedBlocks, setPlacedBlocks] = useState<PlacedBlock[]>(DEMO_BLOCKS);
   const [draggingDef, setDraggingDef] = useState<BlockDef | null>(null);
   const [search, setSearch] = useState("");
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const filteredBlocks = BLOCK_DEFS.filter(b =>
@@ -1282,25 +1284,51 @@ export default function Index() {
       <div className="flex flex-1 overflow-hidden">
 
         {/* ── Left sidebar ── */}
-        <div className="w-[220px] flex-shrink-0 flex flex-col panel-glass animate-slide-in-left" style={{ animationDelay: "0.05s" }}>
-          <Logo />
+        <div
+          className="flex-shrink-0 flex flex-col panel-glass animate-slide-in-left relative transition-all duration-300"
+          style={{ width: leftOpen ? 220 : 40, animationDelay: "0.05s", overflow: "hidden" }}
+        >
+          {/* Collapse toggle */}
+          <button
+            onClick={() => setLeftOpen(v => !v)}
+            className="absolute top-2 right-2 z-10 w-6 h-6 rounded-md flex items-center justify-center transition-all hover:bg-white/10"
+            style={{ background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.25)", color: "#a855f7" }}
+            title={leftOpen ? "Скрыть панель" : "Открыть панель"}
+          >
+            <Icon name={leftOpen ? "PanelLeftClose" : "PanelLeftOpen"} size={13} />
+          </button>
 
-          {/* Panel tabs */}
-          <div className="flex gap-0.5 p-2 border-b border-white/5">
-            {(["categories", "outline", "props"] as PanelTab[]).map(t => {
-              const labels: Record<PanelTab, string> = { categories: "Блоки", outline: "Сцена", props: "Св-ва" };
-              const icons: Record<PanelTab, string> = { categories: "LayoutGrid", outline: "GitBranch", props: "Sliders" };
-              return (
-                <button key={t} onClick={() => setPanelTab(t)}
-                  className={`flex-1 py-1 rounded text-[10px] font-rubik font-medium flex items-center justify-center gap-1 transition-all ${
-                    panelTab === t ? "bg-zeron-purple/20 text-zeron-purple" : "text-white/30 hover:text-white/50"
-                  }`}>
-                  <Icon name={icons[t]} size={10} />
-                  {labels[t]}
+          {/* Collapsed icon strip */}
+          {!leftOpen && (
+            <div className="flex flex-col items-center gap-3 pt-10 px-1">
+              {(["LayoutGrid", "GitBranch", "Sliders"] as string[]).map((ic, i) => (
+                <button key={ic} onClick={() => { setLeftOpen(true); setPanelTab((["categories","outline","props"] as PanelTab[])[i]); }}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-white/30 hover:text-zeron-purple hover:bg-zeron-purple/10 transition-all">
+                  <Icon name={ic} size={14} />
                 </button>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
+
+          {leftOpen && (
+            <>
+              <Logo />
+              {/* Panel tabs */}
+              <div className="flex gap-0.5 p-2 border-b border-white/5">
+                {(["categories", "outline", "props"] as PanelTab[]).map(t => {
+                  const labels: Record<PanelTab, string> = { categories: "Блоки", outline: "Сцена", props: "Св-ва" };
+                  const icons: Record<PanelTab, string> = { categories: "LayoutGrid", outline: "GitBranch", props: "Sliders" };
+                  return (
+                    <button key={t} onClick={() => setPanelTab(t)}
+                      className={`flex-1 py-1 rounded text-[10px] font-rubik font-medium flex items-center justify-center gap-1 transition-all ${
+                        panelTab === t ? "bg-zeron-purple/20 text-zeron-purple" : "text-white/30 hover:text-white/50"
+                      }`}>
+                      <Icon name={icons[t]} size={10} />
+                      {labels[t]}
+                    </button>
+                  );
+                })}
+              </div>
 
           {panelTab === "categories" && (
             <>
@@ -1363,6 +1391,8 @@ export default function Index() {
                 </div>
               ))}
             </div>
+          )}
+            </>
           )}
         </div>
 
@@ -1535,11 +1565,36 @@ export default function Index() {
         </div>
 
         {/* ── Right sidebar ── */}
-        <div className="w-[220px] flex-shrink-0 flex flex-col animate-slide-in-right"
-             style={{ background: "rgba(10,8,20,0.92)", borderLeft: "1px solid rgba(168,85,247,0.1)", animationDelay: "0.1s" }}>
+        <div
+          className="flex-shrink-0 flex flex-col animate-slide-in-right relative transition-all duration-300"
+          style={{ width: rightOpen ? 220 : 40, background: "rgba(10,8,20,0.92)", borderLeft: "1px solid rgba(168,85,247,0.1)", animationDelay: "0.1s", overflow: "hidden" }}
+        >
+          {/* Collapse toggle */}
+          <button
+            onClick={() => setRightOpen(v => !v)}
+            className="absolute top-2 left-2 z-10 w-6 h-6 rounded-md flex items-center justify-center transition-all hover:bg-white/10"
+            style={{ background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.25)", color: "#a855f7" }}
+            title={rightOpen ? "Скрыть панель" : "Открыть панель"}
+          >
+            <Icon name={rightOpen ? "PanelRightClose" : "PanelRightOpen"} size={13} />
+          </button>
 
+          {/* Collapsed icon strip */}
+          {!rightOpen && (
+            <div className="flex flex-col items-center gap-3 pt-10 px-1">
+              {(["BarChart2", "Wand2", "Brain"] as string[]).map(ic => (
+                <button key={ic} onClick={() => setRightOpen(true)}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-white/30 hover:text-zeron-purple hover:bg-zeron-purple/10 transition-all">
+                  <Icon name={ic} size={14} />
+                </button>
+              ))}
+            </div>
+          )}
+
+          {rightOpen && (
+            <>
           {/* Stats */}
-          <div className="p-3 border-b border-white/5">
+          <div className="p-3 pt-9 border-b border-white/5">
             <div className="text-[9px] font-orbitron text-white/25 uppercase tracking-wider mb-2">Статус проекта</div>
             <div className="grid grid-cols-2 gap-1.5">
               {[
@@ -1620,6 +1675,8 @@ export default function Index() {
               ))}
             </div>
           </div>
+            </>
+          )}
         </div>
       </div>
 
