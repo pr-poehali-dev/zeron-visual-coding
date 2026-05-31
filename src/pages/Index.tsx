@@ -22,6 +22,7 @@ interface PlacedBlock {
   x: number;
   y: number;
   connected?: string[];
+  params?: Record<string, string>;
 }
 
 type Tab = "blocks" | "3d" | "ai" | "code";
@@ -47,7 +48,9 @@ const BLOCK_DEFS: BlockDef[] = [
   { id: "ev_start",     category: "events",   icon: "Play",         label: "Старт",              description: "Запускается при старте сцены" },
   { id: "ev_click",     category: "events",   icon: "MousePointer", label: "Клик на объект",     description: "При нажатии на 3D объект" },
   { id: "ev_collision", category: "events",   icon: "Zap",          label: "Столкновение",        description: "При физическом столкновении" },
-  { id: "ev_timer",     category: "events",   icon: "Timer",        label: "Таймер",              description: "Повторяется каждые N секунд" },
+  { id: "ev_wait",      category: "events",   icon: "Hourglass",    label: "Ждать",               description: "Пауза N секунд, затем сигнал" },
+  { id: "ev_repeat",    category: "events",   icon: "Repeat",       label: "Повторить",           description: "Выполнить вложенные блоки N раз" },
+  { id: "ev_forever",   category: "events",   icon: "Infinity",     label: "Вечно повторять",     description: "Бесконечный цикл до остановки" },
   { id: "ev_key",       category: "events",   icon: "Keyboard",     label: "Клавиша",             description: "При нажатии клавиши" },
   // Sound
   { id: "snd_note",     category: "sound",    icon: "Music",        label: "Синтез ноты",         description: "Воспроизвести ноту Web Audio" },
@@ -98,12 +101,13 @@ const BLOCK_DEFS: BlockDef[] = [
 ];
 
 const DEMO_BLOCKS: PlacedBlock[] = [
-  { id: "b1", defId: "ev_start",  x: 80,  y: 60  },
-  { id: "b2", defId: "t3_move",   x: 80,  y: 170 },
-  { id: "b3", defId: "ph_grav",   x: 80,  y: 280 },
-  { id: "b4", defId: "ai_llm",    x: 320, y: 60  },
-  { id: "b5", defId: "ai_codegen",x: 320, y: 170 },
-  { id: "b6", defId: "fx_bloom",  x: 320, y: 280 },
+  { id: "b1", defId: "ev_start",   x: 80,  y: 50,  params: {} },
+  { id: "b2", defId: "ev_wait",    x: 80,  y: 160, params: { seconds: "2" } },
+  { id: "b3", defId: "ev_repeat",  x: 80,  y: 310, params: { times: "3" } },
+  { id: "b4", defId: "ev_forever", x: 80,  y: 450, params: {} },
+  { id: "b5", defId: "ai_llm",     x: 340, y: 50,  params: {} },
+  { id: "b6", defId: "t3_move",    x: 340, y: 160, params: {} },
+  { id: "b7", defId: "fx_bloom",   x: 340, y: 270, params: {} },
 ];
 
 const OUTLINE_OBJECTS = [
@@ -233,10 +237,36 @@ function BlockItem({ def, onDragStart }: { def: BlockDef; onDragStart: (d: Block
   );
 }
 
-function CanvasBlock({ block, def, selected, onClick }: {
+function InlineInput({ value, onChange, color, suffix }: {
+  value: string; onChange: (v: string) => void; color: string; suffix?: string;
+}) {
+  return (
+    <div className="flex items-center gap-1 mt-1.5">
+      <input
+        type="number"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onClick={e => e.stopPropagation()}
+        className="w-14 bg-black/30 border rounded px-1.5 py-0.5 text-[11px] font-mono text-center outline-none focus:ring-1 transition-all"
+        style={{ borderColor: color + "50", color, caretColor: color }}
+        min="0"
+      />
+      {suffix && <span className="text-[10px] font-rubik" style={{ color: color + "99" }}>{suffix}</span>}
+    </div>
+  );
+}
+
+function CanvasBlock({ block, def, selected, onClick, onParamChange, params }: {
   block: PlacedBlock; def: BlockDef; selected: boolean; onClick: () => void;
+  onParamChange?: (blockId: string, key: string, value: string) => void;
+  params?: Record<string, string>;
 }) {
   const meta = CATEGORY_META[def.category];
+  const isWait    = def.id === "ev_wait";
+  const isRepeat  = def.id === "ev_repeat";
+  const isForever = def.id === "ev_forever";
+  const isSpecial = isWait || isRepeat || isForever;
+
   return (
     <div
       className="absolute cursor-pointer select-none transition-all duration-150 animate-scale-in"
@@ -245,14 +275,17 @@ function CanvasBlock({ block, def, selected, onClick }: {
     >
       {/* Connector notch top */}
       <div className="w-8 h-2 mx-3 rounded-t-sm" style={{ background: meta.color.border + "80" }} />
+
       <div
-        className="rounded-xl px-3 py-2 min-w-[160px]"
+        className="rounded-xl px-3 py-2"
         style={{
+          minWidth: isSpecial ? 200 : 160,
           background: meta.color.bg,
           border: `2px solid ${selected ? meta.color.border : meta.color.border + "60"}`,
           boxShadow: selected ? `0 0 20px ${meta.color.glow}, inset 0 1px 0 rgba(255,255,255,0.08)` : `0 4px 12px rgba(0,0,0,0.4)`,
         }}
       >
+        {/* Header row */}
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
                style={{ background: meta.color.border + "30", color: meta.color.text }}>
@@ -261,7 +294,65 @@ function CanvasBlock({ block, def, selected, onClick }: {
           <span className="text-xs font-rubik font-semibold" style={{ color: meta.color.text }}>{def.label}</span>
           {selected && <Icon name="Check" size={10} className="ml-auto" style={{ color: meta.color.text }} />}
         </div>
+
+        {/* ── Ждать ── */}
+        {isWait && (
+          <div className="mt-2 space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-rubik" style={{ color: meta.color.text + "aa" }}>ждать</span>
+              <InlineInput
+                value={params?.seconds ?? "2"}
+                onChange={v => onParamChange?.(block.id, "seconds", v)}
+                color={meta.color.text}
+                suffix="сек"
+              />
+            </div>
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <div className="w-2 h-2 rounded-full border border-current flex-shrink-0" style={{ color: meta.color.text + "60" }} />
+              <span className="text-[9px] font-rubik" style={{ color: meta.color.text + "60" }}>→ затем сигнал дальше</span>
+            </div>
+          </div>
+        )}
+
+        {/* ── Повторить N раз ── */}
+        {isRepeat && (
+          <div className="mt-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-rubik" style={{ color: meta.color.text + "aa" }}>повторить</span>
+              <InlineInput
+                value={params?.times ?? "3"}
+                onChange={v => onParamChange?.(block.id, "times", v)}
+                color={meta.color.text}
+                suffix="раз"
+              />
+            </div>
+            {/* Loop bracket visual */}
+            <div className="mt-2 ml-1 flex items-stretch gap-1.5">
+              <div className="w-1 rounded-full" style={{ background: meta.color.border + "50", minHeight: 20 }} />
+              <span className="text-[9px] font-rubik italic" style={{ color: meta.color.text + "50" }}>вложенные блоки...</span>
+            </div>
+            <div className="w-8 h-1.5 rounded-sm mt-1" style={{ background: meta.color.border + "40" }} />
+          </div>
+        )}
+
+        {/* ── Вечно повторять ── */}
+        {isForever && (
+          <div className="mt-2">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center animate-spin-slow flex-shrink-0"
+                   style={{ borderColor: meta.color.border + "70", borderTopColor: meta.color.border }}>
+              </div>
+              <span className="text-[10px] font-rubik" style={{ color: meta.color.text + "80" }}>∞ бесконечный цикл</span>
+            </div>
+            <div className="mt-2 ml-1 flex items-stretch gap-1.5">
+              <div className="w-1 rounded-full" style={{ background: meta.color.border + "50", minHeight: 20 }} />
+              <span className="text-[9px] font-rubik italic" style={{ color: meta.color.text + "50" }}>вложенные блоки...</span>
+            </div>
+            <div className="w-8 h-1.5 rounded-sm mt-1" style={{ background: meta.color.border + "40" }} />
+          </div>
+        )}
       </div>
+
       {/* Connector notch bottom */}
       <div className="w-8 h-2 mx-3 rounded-b-sm" style={{ background: meta.color.border + "80" }} />
     </div>
@@ -468,15 +559,26 @@ export default function Index() {
     const rect = canvasRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left - 80;
     const y = e.clientY - rect.top - 20;
+    const defaults: Record<string, Record<string, string>> = {
+      ev_wait:   { seconds: "2" },
+      ev_repeat: { times: "3" },
+    };
     const newBlock: PlacedBlock = {
       id: `b${Date.now()}`,
       defId: draggingDef.id,
       x: Math.max(10, x),
       y: Math.max(10, y),
+      params: defaults[draggingDef.id] ?? {},
     };
     setPlacedBlocks(prev => [...prev, newBlock]);
     setDraggingDef(null);
   }, [draggingDef]);
+
+  const handleParamChange = useCallback((blockId: string, key: string, value: string) => {
+    setPlacedBlocks(prev => prev.map(b =>
+      b.id === blockId ? { ...b, params: { ...b.params, [key]: value } } : b
+    ));
+  }, []);
 
   const categories = Object.keys(CATEGORY_META) as BlockCategory[];
 
@@ -614,6 +716,8 @@ export default function Index() {
                       def={def}
                       selected={selectedBlock === b.id}
                       onClick={() => setSelectedBlock(selectedBlock === b.id ? null : b.id)}
+                      onParamChange={handleParamChange}
+                      params={b.params}
                     />
                   );
                 })}
